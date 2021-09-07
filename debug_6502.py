@@ -24,7 +24,7 @@ class WebDebugger:
         socket.on_event("keypress", self.handle_keypress)
         socket.on_event("mem-addr-read", self.handle_memory_read)
 
-    def run(self):
+    def run(self, skip_ops: int = 0):
         socket.run(app)
 
     def handle_memory_read(self, value: str):
@@ -49,17 +49,31 @@ class WebDebugger:
         match key.lower():
             case " ":
                 self.cpu.single_operation()
+                self.send_update()
             case "r":
                 self.cpu.__init__(self.memory)
                 self.send_reset()
             case "enter":
-                self.run_flag = True
-                socket.start_background_task(self.run_continously)
+                if not self.run_flag:
+                    self.run_flag = True
+                    socket.start_background_task(self.run_continously)
             case "s":
                 self.run_flag = False
                 self.send_update()
+            case "t":
+                self.skip_operations(26_763_800)
             case _:
                 pass
+
+    def skip_operations(self, n_ops: int):
+        for _ in range(n_ops):
+            if self.cpu.dbg.n_operations % 100_000 == 0:
+                print(f"Ops: {self.cpu.dbg.n_operations:,} PC: {self.cpu.PC}")
+            self.cpu.single_operation(False)
+            if self.cpu.PC == self.last_pc:
+                break
+            self.last_pc = self.cpu.PC
+        self.send_update()
 
     def run_continously(self):
         while self.run_flag:

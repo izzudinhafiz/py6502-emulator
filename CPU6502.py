@@ -18,8 +18,8 @@ bit = Literal[0] | Literal[1]
 
 class OP(NamedTuple):
     cycles: int
-    operation: Callable
-    addressing_mode: Callable
+    operation: Callable[[], int]
+    addressing_mode: Callable[[], int]
 
 
 class Registers(NamedTuple):
@@ -43,6 +43,7 @@ class Flags(NamedTuple):
 class Memory:
     def __init__(self, size: int = 1024*64):
         self.MAX_MEMORY = size
+        # self.data = np.zeros(self.MAX_MEMORY, dtype=np.uint16)
         self.data = [0] * self.MAX_MEMORY
 
     def register_debugger(self, debugger):
@@ -700,17 +701,22 @@ class CPU:
 
     def ASL(self):
         # Shift bits to the left one bit.
-        val = self.fetch()
-        val = val << 1
+        if self.opcode.addressing_mode.__name__ == self.accumulator.__name__:
+            val = self.A
+            temp = val << 1
+            self.A = temp & 0xFF
+        else:
+            val = self.fetch()
+            temp = val << 1
+            self.memory[self.absolute_address] = temp & 0xFF
 
         # Overflow check
-        if val > 255:
+        if temp > 255:
             self.C = 1
-            val &= 255
         else:
             self.C = 0
 
-        self.set_NZ_flag(self.A)
+        self.set_NZ_flag(temp)
 
         return 0
 
@@ -818,7 +824,7 @@ class CPU:
 
         # On a BRK instruction, the CPU does the same as in the IRQ case,
         # but sets bit #4 (B flag) IN THE COPY of the status register that is saved on the stack.
-        self.stack_push(self.get_status_flags_byte("interrupt"))  # Push status register to stack
+        self.stack_push(self.get_status_flags_byte("instruction"))  # Push status register to stack
         self.I = 1
 
         self.PC = (self.memory[0xFFFF] << 8) | self.memory[0xFFFE]
@@ -906,7 +912,7 @@ class CPU:
 
     def DEC(self):
         val = self.fetch()
-        temp = val - 1
+        temp = (val - 1) & 0xFF
         self.memory[self.absolute_address] = temp
         self.set_NZ_flag(temp)
 
@@ -987,13 +993,15 @@ class CPU:
         return 0
 
     def LSR(self):
-        val = self.fetch()
-        temp = val >> 1
 
-        if self.opcode.addressing_mode is self.accumulator:
+        if self.opcode.addressing_mode.__name__ == self.accumulator.__name__:
+            val = self.A
+            temp = val >> 1
             self.A = temp
 
         else:
+            val = self.fetch()
+            temp = val >> 1
             self.memory[self.absolute_address] = temp
 
         # Set carry flag = to bit 0 of value
@@ -1039,12 +1047,14 @@ class CPU:
         return 0
 
     def ROL(self):
-        val = self.fetch()
-        temp = ((val << 1) & 0xFF) | self.C
 
-        if self.opcode.addressing_mode is self.accumulator:
+        if self.opcode.addressing_mode.__name__ == self.accumulator.__name__:
+            val = self.A
+            temp = ((val << 1) & 0xFF) | self.C
             self.A = temp
         else:
+            val = self.fetch()
+            temp = ((val << 1) & 0xFF) | self.C
             self.memory[self.absolute_address] = temp
 
         # Set carry flag = to bit 0 of value
@@ -1055,12 +1065,14 @@ class CPU:
         return 0
 
     def ROR(self):
-        val = self.fetch()
-        temp = (val >> 1) | (self.C << 7)
 
-        if self.opcode.addressing_mode is self.accumulator:
+        if self.opcode.addressing_mode.__name__ == self.accumulator.__name__:
+            val = self.A
+            temp = (val >> 1) | (self.C << 7)
             self.A = temp
         else:
+            val = self.fetch()
+            temp = (val >> 1) | (self.C << 7)
             self.memory[self.absolute_address] = temp
 
         # Set carry flag = to bit 0 of value
@@ -1206,6 +1218,8 @@ class Debugger:
         trace = Trace(op, registers, flags, self.global_tick, cycles,
                       self.get_memory_write(), self.get_stack(), self.n_operations)
         self.trace_stack.append(trace)
+        if len(self.trace_stack) > 1_000:
+            self.trace_stack.pop(0)
 
     def get_stack(self) -> list[int]:
         stack = self.memory[0x0100:0x01FF + 1]
