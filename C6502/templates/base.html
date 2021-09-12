@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap');
+	</style>
+	<title>6502 Emulator Debugger</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css')}}">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
+		integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+		crossorigin="anonymous"></script>
+	<script src="https://code.jquery.com/jquery-3.2.1.js"></script>
+	<script src="{{ url_for('static', filename='js/update_memory.js')}}"></script>
+
+</head>
+
+<body>
+	<div class="container">
+		{% block memory %}
+
+		{% endblock memory %}
+		<div class="dashboard">
+			<div class="left">
+				{% block cpu %} {% endblock cpu %}
+				{% block program %}{% endblock program %}
+			</div>
+			<div class="right">
+				{% block trace %}{% endblock trace %}
+				{% block memory_access %}{% endblock memory_access %}
+			</div>
+		</div>
+	</div>
+	<div class="navigation">
+		<div class="button-row">
+			<div id="controls">
+				<button>Step</button>
+				<button>Run</button>
+				<button>Reset</button>
+			</div>
+		</div>
+		<div id="memory-inspect">
+			<div id="memory-form">
+				<form id="mem-read" name="mem-read-form">
+					<label for="mem-addr">Memory Address</label>
+					<input type="text" name="mem-addr" id="mem-addr-input" value=0>
+					<input type="submit" value="Read">
+				</form>
+			</div>
+			<div id="mem-value"></div>
+		</div>
+	</div>
+</body>
+
+</html>

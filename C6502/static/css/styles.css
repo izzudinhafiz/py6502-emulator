@@ -1,0 +1,87 @@
+body{
+	background-color: black;
+	color: white;
+	font-family: 'Roboto Mono', monospace;
+}
+
+.container{
+	display: grid;
+	grid-template-columns: fit-content(700px) fit-content(700px);
+	/* grid-template-areas:
+	"memory rightbar" */
+}
+.memory-container{
+	max-width: 850px;
+	/* grid-area: memory; */
+}
+
+.memory-slot{
+	border-right: 1px solid white;
+	padding-right: 0.5ch;
+	
+}
+.memory-row{
+	display: grid;
+	grid-template-columns: 1.5fr repeat(16, 1fr);
+}
+
+.memory-cell{
+	justify-self: center;
+	padding-left: 0.5ch;
+	padding-right: 0.5ch;
+}
+
+.dashboard{
+	/* grid-area: rightbar; */
+	display: grid;
+	grid-template-columns: auto 1fr;
+	margin-left: 20px;
+}
+
+.left{
+	width: 300px;
+	padding-right: 20px;
+}
+
+.program{
+	display:block;
+	margin-top: 2vh
+}
+
+.not-set{
+	color: grey;
+}
+
+.set{
+	color: green;
+}
+
+.underline{
+	text-decoration: underline;
+}
+
+
+.list-box{
+	height: 200px;
+	width: 500px;
+	background-color: rgb(10, 10, 10);
+	overflow: auto;
+	white-space: pre;
+}
+
+#trace{
+	font-size: 1ch;
+}
+
+span{
+	white-space: pre;
+}
+
+#memory-inspect{
+	display: flex;
+	/* justify-content: space-between; */
+}
+
+#mem-value{
+	padding-left:20px;
+}

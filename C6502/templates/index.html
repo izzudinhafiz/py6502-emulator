@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block memory %}
+{% include 'memory.html' %}
+{% endblock memory %}
+
+
+{% block cpu %}
+<div class="status">
+	<span>STATUS:</span>
+	<span class="not-set" id="flag_n">N</span>
+	<span class="not-set" id="flag_v">V</span>
+
+	<span> - </span>
+	<span class="not-set" id="flag_b">B</span>
+	<span class="not-set" id="flag_d">D</span>
+	<span class="not-set" id="flag_i">I</span>
+	<span class="not-set" id="flag_z">Z</span>
+	<span class="not-set" id="flag_c">C</span>
+
+	<br>
+	<br>PC: <span id="p_counter">{{'0x%04X' % 0}} [{{'%05d' % 0}}]</span>
+	<br>A : <span id="a_reg">{{'0x%02X' % 0}} [{{'%05d' % 0}}] </span>
+	<br>X : <span id="x_reg">{{'0x%02X' % 0}} [{{'%05d' % 0}}]</span>
+	<br>Y : <span id="y_reg">{{'0x%02X' % 0}} [{{'%05d' % 0}}]</span>
+	<br>SP: <span id="s_pointer">{{'0x%02X' % 0}} [{{'%05d' % 0}}]</span>
+</div>
+{% endblock cpu %}
+
+{% block program %}
+<div class="program">
+	{% for i in range(16) %}
+	<div class="prog-row" id={{"prog-" ~ i}}></div>
+	{% endfor %}
+</div>
+{% endblock program %}
+
+{% block trace %}
+<div id="trace-block">
+	<span class="underline">TRACE STACK</span>
+	<div id="trace" class="list-box"></div>
+</div>
+{% endblock trace %}
+
+{% block memory_access %}
+<div id="memory-access-block">
+	<span class="underline">RECENT MEMORY WRITE</span>
+	<div id="recent-memory" class="list-box">
+	</div>
+</div>
+<br>
+<div id="stack-trace-block">
+	<span class="underline">STACK CONTENT</span>
+	<div id="stack-trace" class="list-box"></div>
+</div>
+{% endblock memory_access %}
