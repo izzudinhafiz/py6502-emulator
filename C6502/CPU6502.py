@@ -1,92 +1,11 @@
-from typing import Callable, Literal, overload
-from typing import NamedTuple
+from typing import Callable, Literal
 import traceback
-from collections import deque
-
-DEBUG = True
-
-
-class MemoryAddressError(Exception):
-    pass
+from .common import bit, Registers, Flags, OP, UnknownOpcodeError, CPU, twos_comp, Memory
+from .memory_6502 import Memory6502
+from .debugger_6502 import Debugger6502, DEBUG
 
 
-class UnknownOpcodeError(Exception):
-    pass
-
-
-bit = Literal[0] | Literal[1]
-
-
-class OP(NamedTuple):
-    cycles: int
-    operation: Callable[[], int]
-    addressing_mode: Callable[[], int]
-
-
-class Registers(NamedTuple):
-    PC: int
-    SP: int
-    A: int
-    X: int
-    Y: int
-
-
-class Flags(NamedTuple):
-    N: int
-    Z: int
-    C: int
-    I: int
-    D: int
-    B: int
-    O: int
-
-
-def twos_comp(val: int, bits: int) -> int:
-    """compute the 2's complement of int value val"""
-    if (val & (1 << (bits - 1))) != 0:  # if sign bit is set e.g., 8bit: 128-255
-        val = val - (1 << bits)        # compute negative value
-    return val
-
-
-class Memory:
-    def __init__(self, size: int = 1024*64):
-        self.MAX_MEMORY = size
-        # self.data = np.zeros(self.MAX_MEMORY, dtype=np.uint16)
-        self.data = [0] * self.MAX_MEMORY
-
-    def register_debugger(self, debugger):
-        self.dbg: Debugger = debugger
-
-    @overload
-    def __getitem__(self, key: int) -> int: ...
-
-    @overload
-    def __getitem__(self, key: slice) -> list[int]: ...
-
-    def __getitem__(self, key: int | slice) -> int | list[int]:
-        try:
-            temp = self.data[key]
-            return temp
-        except IndexError:
-            raise MemoryAddressError(key)
-
-    def __setitem__(self, key: int, value: int):
-        if key >= self.MAX_MEMORY or key < 0:
-            raise MemoryAddressError(key)
-        self.data[key] = value
-
-        if DEBUG:
-            self.dbg.memory_write(key, value)
-
-    def __len__(self):
-        return len(self.data)
-
-    def write(self, start_addr: int, *data: int):
-        for i, byte in enumerate(data):
-            self.data[start_addr + i] = byte
-
-
-class CPU:
+class CPU6502(CPU):
     PC = 0
     SP = 0
     A = 0
@@ -101,7 +20,7 @@ class CPU:
     B: bit = 0  # Break Command Flag
     V: bit = 0  # Overflow Flag
 
-    def __init__(self, memory: Memory):
+    def __init__(self, memory: Memory = Memory6502()):
 
         self.memory = memory
         self.clock = 0
@@ -329,7 +248,7 @@ class CPU:
         self.global_tick = 0
 
         self.reset()
-        self.dbg = Debugger(self)
+        self.dbg = Debugger6502(self)
 
     def set_reset_vector(self, addr: int):
         self.memory[0xFFFD] = (addr & 0xFF00) >> 8
@@ -381,7 +300,7 @@ class CPU:
             self.reset()
             return False
 
-    def single_operation(self, skip=True):
+    def single_operation(self):
         if DEBUG:
             self.dbg.trace(self.single_step)
         else:
@@ -509,7 +428,7 @@ class CPU:
 
         return 8
 
-    def dissamble(self, start_addr: int, size=16):
+    def disassemble(self, start_addr: int, size=16):
         lo = 0
         hi = 0
         lines = []
@@ -1251,65 +1170,3 @@ class CPU:
         self.set_NZ_flag(self.A)
 
         return 0
-
-
-class Trace(NamedTuple):
-    op: str
-    registers: Registers
-    flags: Flags
-    clock: int
-    last_cycle: int
-    mem_access: list[tuple[int, int]] | None
-    stack: list[int]
-    n_operations: int
-
-
-class Debugger:
-    def __init__(self, cpu: CPU):
-        self.cpu = cpu
-        self.memory = cpu.memory
-        self.trace_stack = deque(maxlen=1000)
-        self.global_tick = 0
-        self.n_operations = 0
-        self.recent_write: list[tuple[int, int]] = []
-        self.memory.register_debugger(self)
-        self.stack: list[int] = []
-
-    def trace(self, func):
-        op = self.cpu.dissamble(self.cpu.PC, 1)[0]
-
-        cycles = 0
-        while func():
-            cycles += 1
-
-        self.n_operations += 1
-        registers = self.cpu.get_registers()
-        flags = self.cpu.get_status_flags()
-
-        trace = Trace(op, registers, flags,
-                      self.global_tick, cycles,
-                      self.get_memory_write(), self.get_stack(),
-                      self.n_operations)
-
-        self.trace_stack.append(trace)
-
-    def get_stack(self) -> list[int]:
-        self.stack = self.memory[0x0101 + self.cpu.SP: 0x01FF + 1]
-        return self.stack
-
-    def memory_write(self, addr, value):
-        self.recent_write.append((addr, value))
-
-    def get_memory_write(self) -> list[tuple[int, int]]:
-        temp = self.recent_write
-        self.recent_write = []
-        return temp
-
-    def get_last_trace(self):
-        if len(self.trace_stack) > 0:
-            return self.trace_stack[-1]
-        else:
-            return None
-
-    def tick(self):
-        self.global_tick += 1

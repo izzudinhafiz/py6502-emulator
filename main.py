@@ -1,13 +1,11 @@
 import struct
-from CPU6502 import CPU, Memory
-from debug_6502 import WebDebugger
-import time
+from C6502 import CPU6502, WebDebugger
 
-with open("6502_functional_test.bin", "rb") as f:
+with open("test_binaries/6502_functional_test.bin", "rb") as f:
     content = f.read()
 data = struct.unpack("B" * len(content), content)
 
-cpu = CPU(Memory())
+cpu = CPU6502()
 cpu.memory.write(0x0000, *data)
 cpu.set_reset_vector(0x400)
 cpu.reset()

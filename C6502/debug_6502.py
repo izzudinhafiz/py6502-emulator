@@ -1,7 +1,8 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO
-from CPU6502 import CPU
 import time
+
+from .common import CPU
 
 app = Flask(__name__)
 socket = SocketIO(app)
@@ -24,7 +25,7 @@ class WebDebugger:
         socket.on_event("keypress", self.handle_keypress)
         socket.on_event("mem-addr-read", self.handle_memory_read)
 
-    def run(self, skip_ops: int = 0):
+    def run(self):
         socket.run(app)
 
     def handle_memory_read(self, value: str):
@@ -51,7 +52,7 @@ class WebDebugger:
                 self.cpu.single_operation()
                 self.send_update()
             case "r":
-                self.cpu.__init__(self.memory)
+                self.cpu.__init__()
                 self.send_reset()
             case "enter":
                 if not self.run_flag:
@@ -69,10 +70,7 @@ class WebDebugger:
         for n in range(n_ops):
             if n % 100_000 == 0:
                 print(f"Ops: {n:,} PC: {self.cpu.PC}")
-            self.cpu.single_operation(False)
-            # if self.cpu.PC == self.last_pc:
-            #     break
-            # self.last_pc = self.cpu.PC
+            self.cpu.single_operation()
         self.send_update()
 
     def run_continously(self):
@@ -112,7 +110,7 @@ class WebDebugger:
                     "y_reg": self.cpu.Y,
                     "s_pointer": self.cpu.SP,
                 },
-                "programs": self.cpu.dissamble(self.cpu.PC),
+                "programs": self.cpu.disassemble(self.cpu.PC, 16),
                 "trace": self.cpu.dbg.get_last_trace()
             }
 
