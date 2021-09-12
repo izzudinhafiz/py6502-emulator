@@ -1,6 +1,7 @@
 from typing import Callable, Literal, overload
 from typing import NamedTuple
 import traceback
+from collections import deque
 
 DEBUG = True
 
@@ -38,6 +39,13 @@ class Flags(NamedTuple):
     D: int
     B: int
     O: int
+
+
+def twos_comp(val: int, bits: int) -> int:
+    """compute the 2's complement of int value val"""
+    if (val & (1 << (bits - 1))) != 0:  # if sign bit is set e.g., 8bit: 128-255
+        val = val - (1 << bits)        # compute negative value
+    return val
 
 
 class Memory:
@@ -673,21 +681,59 @@ class CPU:
 
     # Opcode Functions
 
-    def ADC(self):
+    def ADC(self) -> int:
+        """
+        Add with carry operation
+        Decimal mode: N, V, Z flags are invalid
+
+        Returns:
+            int: Additional cycle
+        """
         val = self.fetch()
-        total = self.A + val + self.C
 
-        # Overflow check
-        # See http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        if ((val ^ total) & (self.A ^ total) & 0x80) != 0:
-            self.V = 1
+        # Binary Mode
+        if not self.D:
+            total = self.A + val + self.C
+
+            # Overflow check
+            # See http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            if ((val ^ total) & (self.A ^ total) & 0x80) != 0:
+                self.V = 1
+            else:
+                self.V = 0
+
+            self.C = 1 if total > 0xFF else 0
+
+            self.A = total & 0xFF  # Truncate to 8 bits
+            self.set_NZ_flag(self.A)
+
+            return 0
+
+        # Decimal Mode
+        a = self.A
+        b = val
+        temp = (a & 0x0F) + (b & 0x0F) + self.C   # Add 1s place of decimal
+
+        if temp >= (0x0A):                        # If bigger than 9
+            temp = ((temp + 0x06) & 0x0F) + 0x10    # Add 6 to skip 10 -> 15, keep the 1s place and carry to 10s place
+
+        a = (a & 0xF0) + (b & 0xF0) + temp        # Add the 10s place in decimal
+
+        if (a & 0xFF) & (1 << 7):                 # N set if 7th bit is set
+            self.N = 1
         else:
+            self.N = 0
+
+        if -128 <= twos_comp(a & 0xFF, 8) <= 127:
             self.V = 0
+        else:
+            self.V = 1
 
-        self.C = 1 if total > 0xFF else 0
+        if a >= 0xA0:                           # If bigger than 100
+            a = a + 0x60                        # Skip 1xx -> 5xx, keeps the 10s and 1s place
 
-        self.A = total & 0xFF  # Truncate to 8 bits
-        self.set_NZ_flag(self.A)
+        self.A = (a & 0xFF)                     # uint8 truncate
+        self.C = 1 if a >= 0x100 else 0
 
         return 0
 
@@ -1102,25 +1148,50 @@ class CPU:
         return 0
 
     def SBC(self):
-        # See http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        # val is converted to ones complement and hence we can use ADC logic
         val = self.fetch()
-        val = val ^ 0x00FF
 
-        total = self.A + val + self.C
+        # Binary Mode
+        if not self.D:
+            # See http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            # val is converted to ones complement and hence we can use ADC logic
+            val = val ^ 0x00FF
 
-        # Overflow check
-        # See http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        if ((val ^ total) & (self.A ^ total) & 0x80) != 0:
-            self.V = 1
+            total = self.A + val + self.C
+
+            # Overflow check
+            # See http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            if ((val ^ total) & (self.A ^ total) & 0x80) != 0:
+                self.V = 1
+            else:
+                self.V = 0
+
+            self.A = total & 0xFF  # Truncate to 8 bits
+            self.C = 1 if total > 0xFF else 0  # Carry if more than 255
+
+        # Decimal Mode
         else:
-            self.V = 0
+            a = self.A
+            b = val
+            temp = (a & 0x0F) - (b & 0x0F) + self.C - 1
+            if temp < 0:
+                temp = ((temp - 0x06) & 0x0F) - 0x10
 
-        self.C = 1 if total > 0xFF else 0  # Carry if more than 255
+            a = (a & 0xF0) - (b & 0xF0) + temp
 
-        self.A = total & 0xFF  # Truncate to 8 bits
+            if a < 0:
+                a = a - 0x60
+
+            val = val ^ 0x00FF
+            total = self.A + val + self.C
+            if ((val ^ total) & (self.A ^ total) & 0x80) != 0:
+                self.V = 1
+            else:
+                self.V = 0
+
+            self.A = a & 0xFF
+            self.C = 0 if a < 0 else 1
+
         self.set_NZ_flag(self.A)
-
         return 0
 
     def SEC(self):
@@ -1197,7 +1268,7 @@ class Debugger:
     def __init__(self, cpu: CPU):
         self.cpu = cpu
         self.memory = cpu.memory
-        self.trace_stack = []
+        self.trace_stack = deque(maxlen=1000)
         self.global_tick = 0
         self.n_operations = 0
         self.recent_write: list[tuple[int, int]] = []
@@ -1206,26 +1277,24 @@ class Debugger:
 
     def trace(self, func):
         op = self.cpu.dissamble(self.cpu.PC, 1)[0]
-        start_tick = self.global_tick
-        self.n_operations += 1
-        while func():
-            pass
 
-        cycles = self.global_tick - start_tick
+        cycles = 0
+        while func():
+            cycles += 1
+
+        self.n_operations += 1
         registers = self.cpu.get_registers()
         flags = self.cpu.get_status_flags()
 
-        trace = Trace(op, registers, flags, self.global_tick, cycles,
-                      self.get_memory_write(), self.get_stack(), self.n_operations)
+        trace = Trace(op, registers, flags,
+                      self.global_tick, cycles,
+                      self.get_memory_write(), self.get_stack(),
+                      self.n_operations)
+
         self.trace_stack.append(trace)
-        if len(self.trace_stack) > 1_000:
-            self.trace_stack.pop(0)
 
     def get_stack(self) -> list[int]:
-        stack = self.memory[0x0100:0x01FF + 1]
-        stack_pointer = self.cpu.SP
-        stack = stack[stack_pointer+1:]
-        self.stack = stack
+        self.stack = self.memory[0x0101 + self.cpu.SP: 0x01FF + 1]
         return self.stack
 
     def memory_write(self, addr, value):

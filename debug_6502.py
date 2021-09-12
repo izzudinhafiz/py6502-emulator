@@ -61,18 +61,18 @@ class WebDebugger:
                 self.run_flag = False
                 self.send_update()
             case "t":
-                self.skip_operations(26_763_800)
+                self.skip_operations(30_646_000)
             case _:
                 pass
 
     def skip_operations(self, n_ops: int):
-        for _ in range(n_ops):
-            if self.cpu.dbg.n_operations % 100_000 == 0:
-                print(f"Ops: {self.cpu.dbg.n_operations:,} PC: {self.cpu.PC}")
+        for n in range(n_ops):
+            if n % 100_000 == 0:
+                print(f"Ops: {n:,} PC: {self.cpu.PC}")
             self.cpu.single_operation(False)
-            if self.cpu.PC == self.last_pc:
-                break
-            self.last_pc = self.cpu.PC
+            # if self.cpu.PC == self.last_pc:
+            #     break
+            # self.last_pc = self.cpu.PC
         self.send_update()
 
     def run_continously(self):
